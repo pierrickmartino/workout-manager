@@ -197,6 +197,16 @@ def draft_from_row(row: ExercisePrescription) -> PrescriptionDraft:
     )
 
 
+def draft_from_view(view: PrescriptionView) -> PrescriptionDraft:
+    """Read one joined Prescription back into a draft (ADR-0069), dropping the catalog
+    join and the position — used to rewrite a plan around its existing Prescriptions
+    (adding a Warm-up Suggestion, ADR-0143) without re-listing the spine."""
+
+    return PrescriptionDraft(
+        **{name: getattr(view, name) for name in prescription_spine_fields()}
+    )
+
+
 def evolve_prescription_row(
     row: ExercisePrescription, **changes: object
 ) -> ExercisePrescription:
@@ -251,6 +261,7 @@ __all__ = [
     "USER_AUTHORED_FIELDS",
     "row_from_draft",
     "draft_from_row",
+    "draft_from_view",
     "evolve_prescription_row",
     "view_from_row",
 ]

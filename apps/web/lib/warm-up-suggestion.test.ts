@@ -2,9 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  WARM_UP_ADD_FALLBACK_ERROR,
   WARM_UP_FALLBACK_ERROR,
   initialWarmUpState,
+  toAddWarmUpResult,
   toWarmUpResult,
+  warmUpAddLabel,
   warmUpButtonView,
   warmUpPreview,
   warmUpReducer,
@@ -172,6 +175,66 @@ test("maps a failed envelope to its message, or a fallback when it has none", ()
   assert.deepEqual(toWarmUpResult({ success: false, data: null, error: null }), {
     ok: false,
     message: WARM_UP_FALLBACK_ERROR,
+  });
+});
+
+test("adding keeps the preview on screen while the drills are saved", () => {
+  const ready = warmUpReducer(initialWarmUpState, { type: "succeeded", suggestion: SUGGESTION });
+
+  const adding = warmUpReducer(ready, { type: "addRequested" });
+
+  assert.deepEqual(adding, { status: "adding", suggestion: SUGGESTION });
+  assert.equal(warmUpAddLabel(adding), "Adding…");
+});
+
+test("a saved warm-up returns to the idle button, as the refreshed Session now shows it", () => {
+  const adding = warmUpReducer(
+    { status: "ready", suggestion: SUGGESTION },
+    { type: "addRequested" },
+  );
+
+  assert.deepEqual(warmUpReducer(adding, { type: "added" }), initialWarmUpState);
+});
+
+test("a failed add keeps the preview with its message and offers retry", () => {
+  const adding = warmUpReducer(
+    { status: "ready", suggestion: SUGGESTION },
+    { type: "addRequested" },
+  );
+
+  const failed = warmUpReducer(adding, { type: "addFailed", message: "Try again." });
+
+  assert.deepEqual(failed, { status: "addError", suggestion: SUGGESTION, message: "Try again." });
+  assert.equal(warmUpAddLabel(failed), "Retry add");
+  assert.deepEqual(warmUpReducer(failed, { type: "addRequested" }), {
+    status: "adding",
+    suggestion: SUGGESTION,
+  });
+});
+
+test("the preview offers Add before anything is tried", () => {
+  assert.equal(warmUpAddLabel({ status: "ready", suggestion: SUGGESTION }), "Add");
+});
+
+test("an add requested with no preview on screen changes nothing", () => {
+  assert.deepEqual(warmUpReducer(initialWarmUpState, { type: "addRequested" }), initialWarmUpState);
+});
+
+test("discarding a failed add leaves nothing behind", () => {
+  const failed = { status: "addError", suggestion: SUGGESTION, message: "x" } as const;
+
+  assert.deepEqual(warmUpReducer(failed, { type: "discarded" }), initialWarmUpState);
+});
+
+test("maps the add envelope to success, or its message with a fallback", () => {
+  assert.deepEqual(toAddWarmUpResult({ success: true, error: null }), { ok: true });
+  assert.deepEqual(toAddWarmUpResult({ success: false, error: "Already trained." }), {
+    ok: false,
+    message: "Already trained.",
+  });
+  assert.deepEqual(toAddWarmUpResult({ success: false, error: null }), {
+    ok: false,
+    message: WARM_UP_ADD_FALLBACK_ERROR,
   });
 });
 

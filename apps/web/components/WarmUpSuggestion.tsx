@@ -1,18 +1,20 @@
 "use client";
 
 import { useReducer, useTransition } from "react";
-import { Loader2, RefreshCw, X, Zap } from "@/components/pulse/icons";
+import { Loader2, Plus, RefreshCw, X, Zap } from "@/components/pulse/icons";
 
-import { requestWarmUpSuggestion } from "@/app/sessions/[id]/actions";
+import { requestWarmUpSuggestion, submitWarmUp } from "@/app/sessions/[id]/actions";
 import { Button } from "@/components/ui/button";
 import { useConnectivity } from "@/lib/use-connectivity";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   initialWarmUpState,
+  warmUpAddLabel,
   warmUpButtonView,
   warmUpPreview,
   warmUpReducer,
+  type WarmUpSuggestion as WarmUpSuggestionPayload,
 } from "@/lib/warm-up-suggestion";
 
 interface WarmUpSuggestionProps {
@@ -21,8 +23,10 @@ interface WarmUpSuggestionProps {
 }
 
 // The Session preview's Warm-up Suggestion (ADR-0143, #778): a button that asks the AI for 4–6
-// drills, a loading state, the preview with Discard and Regenerate, and an error with Retry.
-// A preview only — the Session is never changed here. Every rule lives in the view-model.
+// drills, a loading state, the preview with Add, Discard and Regenerate, and an error with Retry.
+// Add (#780) saves the drills as the Session's leading Warm-up Section; the server action
+// revalidates the page, so the plan below re-renders with them. Every rule lives in the
+// view-model.
 export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
   const [state, dispatch] = useReducer(warmUpReducer, initialWarmUpState);
   const [, startTransition] = useTransition();
@@ -52,8 +56,17 @@ export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
     );
   }
 
-  if (state.status === "ready") {
+  const add = (suggestion: WarmUpSuggestionPayload) => {
+    dispatch({ type: "addRequested" });
+    startTransition(async () => {
+      const result = await submitWarmUp(session.id, suggestion.drills);
+      dispatch(result.ok ? { type: "added" } : { type: "addFailed", message: result.message });
+    });
+  };
+
+  if (state.status === "ready" || state.status === "adding" || state.status === "addError") {
     const preview = warmUpPreview(state.suggestion, unit);
+    const adding = state.status === "adding";
     return (
       <div className="flex flex-col gap-3 rounded-sm border border-border-lite bg-base p-3">
         <span className="font-mono text-[12px] font-semibold uppercase tracking-wider text-cyan">
@@ -70,15 +83,41 @@ export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
           ))}
         </ul>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" size="sm" disabled={!online} onClick={() => request(true)}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!online || adding}
+            onClick={() => add(state.suggestion)}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            {warmUpAddLabel(state)}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!online || adding}
+            onClick={() => request(true)}
+          >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             Regenerate
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => dispatch({ type: "discarded" })}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={adding}
+            onClick={() => dispatch({ type: "discarded" })}
+          >
             <X className="h-3.5 w-3.5" aria-hidden />
             Discard
           </Button>
         </div>
+        {state.status === "addError" ? (
+          <span role="alert" className="font-mono text-[12px] text-magenta">
+            {state.message}
+          </span>
+        ) : null}
       </div>
     );
   }

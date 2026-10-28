@@ -1,0 +1,138 @@
+"""Adding a Warm-up Suggestion to a Session (ADR-0143, #780).
+
+``apply_warm_up`` puts the accepted drills at the front of the owner's Session as ordinary
+one-set Exercise Prescriptions with the **warm-up** Set Type, so the read-time Session
+Section projection (ADR-0074) shows them as its leading Warm-up Section. The rest of the
+plan keeps its order and is renumbered contiguously behind them.
+
+The edit is the narrow ADR-0143 exception to Deploy: it is allowed on a standalone *and* a
+Protocol-member Session, but only the caller's own Session, only while it is un-performed
+(no Logged Session references it, ADR-0020) and only that one Session. Every guard runs
+before the single write. Session Provenance, name and regeneration guard are untouched (the
+write goes through ``SessionRepository.replace_plan``), so Generation Feedback and
+Regeneration stay available."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import Quantity, QuantityKind
+from app.domain.set_type import SetType
+from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.repositories.prescription_mapping import PrescriptionDraft, draft_from_view
+from app.repositories.session_repository import SessionRepository, SessionView
+from app.warm_up.service import DRILL_SETS, SessionNotFound
+
+BODYWEIGHT_TEXT = "bodyweight"
+
+
+class SessionPerformed(Exception):
+    """The Session has a Logged Session: it is settled record and is never rewritten."""
+
+
+class UnknownDrillExercise(Exception):
+    """A drill references an Exercise that is not in the catalog."""
+
+    def __init__(self, exercise_id: int) -> None:
+        super().__init__(exercise_id)
+        self.exercise_id = exercise_id
+
+
+@dataclass(frozen=True)
+class WarmUpDrill:
+    """One accepted drill: a catalog Exercise, its amount, its typed Load and its rest.
+
+    ``amount`` is a rep count for ``repetitions`` or seconds for ``duration``; the Load is
+    ``bodyweight`` or ``qualitative`` (``load_text`` names it, e.g. "light band") — never kg."""
+
+    exercise_id: int
+    quantity_kind: QuantityKind
+    amount: int
+    load_kind: LoadKind
+    load_text: str | None
+    rest_seconds: int
+
+
+def drill_quantity(kind: QuantityKind, amount: int) -> Quantity:
+    """The typed Prescribed Quantity of a drill: ``amount`` reps, or ``amount`` seconds."""
+
+    if kind is QuantityKind.DURATION:
+        return Quantity(kind=kind, text=f"{amount}s", seconds=float(amount))
+    return Quantity(kind=QuantityKind.REPETITIONS, text=str(amount), count=amount)
+
+
+def drill_load(kind: LoadKind, text: str | None) -> ParsedLoad:
+    """The typed Load of a drill: bodyweight, or a named qualitative Load."""
+
+    if kind is LoadKind.QUALITATIVE:
+        return ParsedLoad(kind=kind, text=(text or "").strip())
+    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=BODYWEIGHT_TEXT)
+
+
+def warm_up_prescription(drill: WarmUpDrill) -> PrescriptionDraft:
+    """The one-set warm-up Exercise Prescription a drill becomes."""
+
+    quantity = drill_quantity(drill.quantity_kind, drill.amount)
+    return PrescriptionDraft(
+        exercise_id=drill.exercise_id,
+        sets=DRILL_SETS,
+        reps=quantity.text,
+        rest_seconds=drill.rest_seconds,
+        recommended_load=drill_load(drill.load_kind, drill.load_text).to_dict(),
+        prescribed_quantity=quantity.to_dict(),
+        set_type=SetType.WARM_UP.value,
+    )
+
+
+def apply_warm_up(
+    session_id: int,
+    clerk_user_id: str,
+    drills: Sequence[WarmUpDrill],
+    *,
+    sessions: SessionRepository,
+    logged: LoggedSessionRepository,
+    exercises: ExerciseRepository,
+) -> SessionView:
+    """Prepend ``drills`` to the owner's un-performed Session and return it (ADR-0143).
+
+    Raises ``SessionNotFound`` for a missing or another user's Session, ``SessionPerformed``
+    when any Logged Session references it, and ``UnknownDrillExercise`` for a drill outside
+    the catalog — each before anything is written."""
+
+    session = sessions.get(session_id, clerk_user_id)
+    if session is None:
+        raise SessionNotFound(session_id)
+    if logged.count_for_session(clerk_user_id, session_id) > 0:
+        raise SessionPerformed(session_id)
+    for drill in drills:
+        if exercises.get(drill.exercise_id) is None:
+            raise UnknownDrillExercise(drill.exercise_id)
+
+    prescriptions = [
+        *(warm_up_prescription(drill) for drill in drills),
+        *(draft_from_view(item) for item in session.prescriptions),
+    ]
+    updated = sessions.replace_plan(
+        session_id,
+        clerk_user_id,
+        training_type=session.training_type,
+        duration_minutes=session.duration_minutes,
+        prescriptions=prescriptions,
+    )
+    if updated is None:  # ownership checked above; defensive only
+        raise SessionNotFound(session_id)
+    return updated
+
+
+__all__ = [
+    "SessionPerformed",
+    "UnknownDrillExercise",
+    "WarmUpDrill",
+    "apply_warm_up",
+    "drill_load",
+    "drill_quantity",
+    "warm_up_prescription",
+]

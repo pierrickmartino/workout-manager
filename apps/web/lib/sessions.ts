@@ -8,7 +8,7 @@ import type {
 import type { LoggedSession } from "./logs-types";
 import type { EditPlanInput } from "./session-edit";
 import type { SessionSummary } from "./session-library";
-import type { WarmUpSuggestion } from "./warm-up-suggestion";
+import type { WarmUpDrill, WarmUpSuggestion } from "./warm-up-suggestion";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
@@ -262,6 +262,16 @@ export async function suggestWarmUp(
   regenerate: boolean,
 ): Promise<Envelope<WarmUpSuggestion>> {
   return apiSend(`/api/sessions/${sessionId}/warm-up-suggestion`, "POST", { regenerate });
+}
+
+// Add previewed Warm-up Suggestion drills to the front of the user's own un-performed Session
+// (ADR-0143, #780) — standalone or Protocol member — as one-set warm-up Prescriptions. Returns
+// the updated Session. Another user's Session is 404, a performed one 409, a bad drill 422.
+export async function addWarmUp(
+  sessionId: number,
+  drills: WarmUpDrill[],
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${sessionId}/warm-up`, "PUT", { drills });
 }
 
 // Read every Prescription's harder-Variation offer in one request (#202, audit V-5):
