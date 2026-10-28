@@ -5,7 +5,7 @@ import {
   LIVE_WARM_UP_ADD_LOCKED_NOTE,
   LIVE_WARM_UP_KEPT_NOTE,
   afterLiveWarmUpAdded,
-  liveWarmUpAddView,
+  liveWarmUpAddLockedNote,
   liveWarmUpButtonView,
 } from "./live-warm-up.ts";
 import { initLiveSession, liveSessionReducer, type LiveSessionState } from "./live-session.ts";
@@ -102,16 +102,13 @@ test("disables the button offline with an explanation", () => {
 });
 
 test("allows Add while no set has been completed", () => {
-  assert.deepEqual(liveWarmUpAddView(live(WITH_WARM_UP)), { allowed: true, note: null });
+  assert.equal(liveWarmUpAddLockedNote(live(WITH_WARM_UP)), null);
 });
 
 test("locks Add, with an explanation, once any set is completed — even a warm-up one", () => {
   const state = complete(live(WITH_WARM_UP), 0);
 
-  assert.deepEqual(liveWarmUpAddView(state), {
-    allowed: false,
-    note: LIVE_WARM_UP_ADD_LOCKED_NOTE,
-  });
+  assert.equal(liveWarmUpAddLockedNote(state), LIVE_WARM_UP_ADD_LOCKED_NOTE);
 });
 
 test("a saved warm-up reloads the Live Session while nothing has been completed", () => {

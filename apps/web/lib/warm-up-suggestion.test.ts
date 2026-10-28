@@ -6,7 +6,9 @@ import {
   WARM_UP_FALLBACK_ERROR,
   WARM_UP_REPLACE_CONFIRMATION,
   WARM_UP_REPLACE_CONFIRM_LABEL,
+  addAwaitsConfirmation,
   initialWarmUpState,
+  shownSuggestion,
   toAddWarmUpResult,
   toWarmUpResult,
   warmUpAddLabel,
@@ -295,6 +297,29 @@ test("a failed replacement retries without asking again", () => {
     status: "adding",
     suggestion: REPLACING,
   });
+});
+
+test("the panel shows the suggestion from preview until it is saved or discarded", () => {
+  assert.equal(shownSuggestion(initialWarmUpState), null);
+  assert.equal(shownSuggestion({ status: "loading", regenerate: false }), null);
+  assert.equal(shownSuggestion({ status: "error", message: "x", regenerate: true }), null);
+  for (const status of ["ready", "confirmingReplace", "adding"] as const) {
+    assert.equal(shownSuggestion({ status, suggestion: SUGGESTION }), SUGGESTION);
+  }
+  assert.equal(
+    shownSuggestion({ status: "addError", suggestion: SUGGESTION, message: "x" }),
+    SUGGESTION,
+  );
+});
+
+test("only a first Replace waits for confirmation; an Add or a confirmed Replace saves", () => {
+  assert.equal(addAwaitsConfirmation({ status: "ready", suggestion: REPLACING }), true);
+  assert.equal(addAwaitsConfirmation({ status: "ready", suggestion: SUGGESTION }), false);
+  assert.equal(addAwaitsConfirmation({ status: "confirmingReplace", suggestion: REPLACING }), false);
+  assert.equal(
+    addAwaitsConfirmation({ status: "addError", suggestion: REPLACING, message: "x" }),
+    false,
+  );
 });
 
 test("a Session without a Warm-up Section adds without a confirmation", () => {

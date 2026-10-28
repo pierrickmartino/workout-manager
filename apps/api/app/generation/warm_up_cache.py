@@ -38,9 +38,10 @@ def _normalized_set(values: Iterable[str]) -> list[str]:
 def derive_warm_up_key(request: WarmUpRequest) -> str:
     """Reduce ``request`` to its coarse key: the sorted muscle set and equipment set."""
 
+    derived = request.derived
     payload = {
-        "muscles": _normalized_set([*request.muscles, *request.unmapped_exercises]),
-        "equipment": _normalized_set(request.equipment),
+        "muscles": _normalized_set([*derived.muscle_names, *derived.unmapped_exercises]),
+        "equipment": _normalized_set(derived.equipment),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -68,7 +69,7 @@ class WarmUpCache:
         A Sensitive Constraint bypasses the cache in both directions; ``regenerate`` skips
         the read and leaves the stored suggestion untouched."""
 
-        if request.sensitive_constraints or regenerate:
+        if request.derived.has_sensitive_constraint or regenerate:
             return generate(request)
 
         key = derive_warm_up_key(request)

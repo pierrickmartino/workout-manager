@@ -21,6 +21,7 @@ from app.domain.warm_up import (
     MAX_MINUTES,
     MIN_DRILLS,
     MIN_MINUTES,
+    WarmUpInput,
 )
 from app.generation.llm.port import StructuredLLM
 from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
@@ -33,12 +34,10 @@ _SUBJECT = "warm-up suggestion"
 
 @dataclass(frozen=True)
 class WarmUpRequest:
-    """What one Warm-up Suggestion is generated from (see ``derive_warm_up_input``)."""
+    """What one Warm-up Suggestion is generated from: the Session and Profile input
+    (``derive_warm_up_input``) plus the catalog drills the model may reuse."""
 
-    muscles: tuple[str, ...]
-    unmapped_exercises: tuple[str, ...] = ()
-    equipment: tuple[str, ...] = ()
-    sensitive_constraints: tuple[str, ...] = ()
+    derived: WarmUpInput
     candidate_drills: tuple[str, ...] = ()
 
 
@@ -79,18 +78,19 @@ def _listed(values: tuple[str, ...], empty: str) -> str:
 
 
 def _user_prompt(request: WarmUpRequest) -> str:
+    derived = request.derived
     lines = [
-        f"Muscles to prepare, most important first: {_listed(request.muscles, 'full body')}",
+        f"Muscles to prepare, most important first: {_listed(derived.muscle_names, 'full body')}",
     ]
-    if request.unmapped_exercises:
+    if derived.unmapped_exercises:
         lines.append(
             "Movements in the session (no muscle data): "
-            + ", ".join(request.unmapped_exercises)
+            + ", ".join(derived.unmapped_exercises)
         )
-    lines.append(f"Available equipment: {_listed(request.equipment, 'bodyweight')}")
-    if request.sensitive_constraints:
+    lines.append(f"Available equipment: {_listed(derived.equipment, 'bodyweight')}")
+    if derived.has_sensitive_constraint:
         lines.append(
-            "Sensitive constraints to respect: " + ", ".join(request.sensitive_constraints)
+            "Sensitive constraints to respect: " + ", ".join(derived.sensitive_constraints)
         )
     lines.append(
         f"Catalog drills to prefer: {_listed(request.candidate_drills, 'none available')}"

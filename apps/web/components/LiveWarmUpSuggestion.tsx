@@ -6,7 +6,7 @@ import { Alert } from "@/components/pulse/alert";
 import { WarmUpPanel } from "@/components/WarmUpSuggestion";
 import {
   afterLiveWarmUpAdded,
-  liveWarmUpAddView,
+  liveWarmUpAddLockedNote,
   liveWarmUpButtonView,
 } from "@/lib/live-warm-up";
 import type { LiveSessionState } from "@/lib/live-session";
@@ -53,7 +53,7 @@ export function LiveWarmUpSuggestion({ session, state, unit }: LiveWarmUpSuggest
         button={liveWarmUpButtonView(session, state, online)}
         online={online}
         unit={unit}
-        addLockedNote={liveWarmUpAddView(state).note}
+        addLockedNote={liveWarmUpAddLockedNote(state)}
         onAdded={onAdded}
       />
       {keptNote ? (

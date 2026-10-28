@@ -18,62 +18,20 @@ Regeneration stay available."""
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 
-from app.domain.load import LoadKind, ParsedLoad
-from app.domain.quantity import Quantity, QuantityKind
 from app.domain.set_type import SetType
-from app.domain.warm_up import leading_warm_up_length
+from app.domain.warm_up import (
+    DRILL_SETS,
+    WarmUpDrill,
+    drill_load,
+    drill_quantity,
+    leading_warm_up_length,
+)
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.prescription_mapping import PrescriptionDraft, draft_from_view
 from app.repositories.session_repository import SessionRepository, SessionView
-from app.warm_up.service import DRILL_SETS, SessionNotFound
-
-BODYWEIGHT_TEXT = "bodyweight"
-
-
-class SessionPerformed(Exception):
-    """The Session has a Logged Session: it is settled record and is never rewritten."""
-
-
-class UnknownDrillExercise(Exception):
-    """A drill references an Exercise that is not in the catalog."""
-
-    def __init__(self, exercise_id: int) -> None:
-        super().__init__(exercise_id)
-        self.exercise_id = exercise_id
-
-
-@dataclass(frozen=True)
-class WarmUpDrill:
-    """One accepted drill: a catalog Exercise, its amount, its typed Load and its rest.
-
-    ``amount`` is a rep count for ``repetitions`` or seconds for ``duration``; the Load is
-    ``bodyweight`` or ``qualitative`` (``load_text`` names it, e.g. "light band") — never kg."""
-
-    exercise_id: int
-    quantity_kind: QuantityKind
-    amount: int
-    load_kind: LoadKind
-    load_text: str | None
-    rest_seconds: int
-
-
-def drill_quantity(kind: QuantityKind, amount: int) -> Quantity:
-    """The typed Prescribed Quantity of a drill: ``amount`` reps, or ``amount`` seconds."""
-
-    if kind is QuantityKind.DURATION:
-        return Quantity(kind=kind, text=f"{amount}s", seconds=float(amount))
-    return Quantity(kind=QuantityKind.REPETITIONS, text=str(amount), count=amount)
-
-
-def drill_load(kind: LoadKind, text: str | None) -> ParsedLoad:
-    """The typed Load of a drill: bodyweight, or a named qualitative Load."""
-
-    if kind is LoadKind.QUALITATIVE:
-        return ParsedLoad(kind=kind, text=(text or "").strip())
-    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=BODYWEIGHT_TEXT)
+from app.warm_up.errors import SessionNotFound, SessionPerformed, UnknownDrillExercise
 
 
 def warm_up_prescription(drill: WarmUpDrill) -> PrescriptionDraft:
@@ -135,12 +93,4 @@ def apply_warm_up(
     return updated
 
 
-__all__ = [
-    "SessionPerformed",
-    "UnknownDrillExercise",
-    "WarmUpDrill",
-    "apply_warm_up",
-    "drill_load",
-    "drill_quantity",
-    "warm_up_prescription",
-]
+__all__ = ["apply_warm_up", "warm_up_prescription"]

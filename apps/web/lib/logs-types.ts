@@ -5,6 +5,7 @@
 import type { Effort, EffortScale } from "./effort";
 import type { Load, LoadKind } from "./load";
 import type { Quantity, QuantityKind } from "./quantity";
+import type { SetType } from "./set-type-view";
 
 // The Completion Outcome (ADR-0013) a client declares on a Logged Session:
 // Completed when every prescribed set was attempted, Incomplete when any was left
@@ -110,9 +111,9 @@ export interface LogSetInput {
   // stores as unset. Rides the finish, the static log form, the ad-hoc log, and Log Correction.
   note?: string | null;
   // The Set Type (ADR-0065) of the performed set, or omitted for "unset" (reads as working).
-  // The Live Session finish sends its live set's type, so a warm-up performed live leaves
+  // The Live Session finish and the static log form send it, so a warm-up performed leaves
   // Volume and strength records (issue #777).
-  set_type?: string | null;
+  set_type?: SetType | null;
 }
 
 // The request the user submits to record a performance of a Session. The

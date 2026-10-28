@@ -62,6 +62,9 @@ const ALL_JOURNEYS = [
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",
+  // The Warm-up Suggestion preview and its Replace confirmation (ADR-0143), reachable only
+  // through an AI round trip. Unconverted, so the preview must hold the 26rem column.
+  "warm-up", "warm-up-replace",
   // The action sheet (ADR-0113), a modal for the same reason. It is capped at the shell's 26rem,
   // so at 1440px it must stay a centred bottom sheet rather than a 72rem strip.
   "sheet",

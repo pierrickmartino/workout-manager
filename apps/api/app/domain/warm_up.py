@@ -12,6 +12,9 @@ HTTP, no AI.
 - :func:`leading_warm_up_length` locates the Session's leading Warm-up Section with the same
   projection, so the preview can say "Replace warm-up" and Replace swaps exactly that run.
 - :func:`candidate_drills` picks the catalog drills the model may reuse.
+- :class:`WarmUpDrill`, :func:`drill_quantity` and :func:`drill_load` are the one shape of a
+  drill's one-set prescription — reps or seconds, bodyweight or a named Load, never kg —
+  shared by the preview and the add step.
 
 Readiness is deliberately not an input (ADR-0143)."""
 
@@ -19,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.domain.equipment import (
     Equipment,
@@ -27,6 +30,8 @@ from app.domain.equipment import (
     normalize_stored_equipment,
 )
 from app.domain.fitness_profile import SENSITIVE_CONSTRAINT_TYPES
+from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import Quantity, QuantityKind
 from app.domain.session_section import (
     SessionSection,
     reads_as_warm_up_drill,
@@ -42,6 +47,17 @@ MAX_MINUTES = 8
 MAX_DRILL_REST_SECONDS = 15
 #: How many catalog drills the prompt offers for reuse — enough choice, bounded prompt.
 MAX_CANDIDATE_DRILLS = 40
+#: Every suggested drill is one set.
+DRILL_SETS = 1
+#: A drill's reps or seconds: generous for a timed hold, absurd beyond it.
+MAX_DRILL_AMOUNT = 120
+#: The text of a drill's bodyweight Load.
+BODYWEIGHT_TEXT = "bodyweight"
+
+#: A drill is counted in reps or timed in seconds — never a distance.
+DrillQuantityKind = Literal[QuantityKind.REPETITIONS, QuantityKind.DURATION]
+#: A drill's Load is bodyweight or a named qualitative Load ("light band") — never kg.
+DrillLoadKind = Literal[LoadKind.BODYWEIGHT, LoadKind.QUALITATIVE]
 
 _NON_WORKING = frozenset({SessionSection.WARM_UP, SessionSection.COOLDOWN})
 
@@ -174,6 +190,43 @@ def leading_warm_up_length(prescriptions: Sequence[_WarmUpPrescription]) -> int:
     return length
 
 
+@dataclass(frozen=True)
+class WarmUpDrill:
+    """One accepted drill: a catalog Exercise, its amount, its typed Load and its rest.
+
+    ``amount`` is a rep count for ``repetitions`` or seconds for ``duration``; the Load is
+    ``bodyweight`` or ``qualitative`` (``load_text`` names it, e.g. "light band") — never kg."""
+
+    exercise_id: int
+    quantity_kind: DrillQuantityKind
+    amount: int
+    load_kind: DrillLoadKind
+    load_text: str | None
+    rest_seconds: int
+
+
+def drill_quantity(kind: DrillQuantityKind, amount: int) -> Quantity:
+    """The typed Prescribed Quantity of a drill: ``amount`` reps, or ``amount`` seconds."""
+
+    if kind is QuantityKind.DURATION:
+        return Quantity(kind=kind, text=f"{amount}s", seconds=float(amount))
+    return Quantity(kind=QuantityKind.REPETITIONS, text=str(amount), count=amount)
+
+
+def drill_load(kind: DrillLoadKind, text: str | None) -> ParsedLoad:
+    """The typed Load of a drill: bodyweight, or a named qualitative Load."""
+
+    if kind is LoadKind.QUALITATIVE:
+        return ParsedLoad(kind=kind, text=(text or "").strip())
+    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=BODYWEIGHT_TEXT)
+
+
+def drill_load_names_itself(kind: DrillLoadKind, text: str | None) -> bool:
+    """Whether a drill's Load is complete: a qualitative Load must say what it is."""
+
+    return kind is not LoadKind.QUALITATIVE or bool((text or "").strip())
+
+
 def fits_equipment(required: Iterable[str], equipment: Iterable[str]) -> bool:
     """Whether a drill needing ``required`` can be done with the ``equipment`` set."""
 
@@ -197,16 +250,25 @@ def candidate_drills(
 
 
 __all__ = [
+    "BODYWEIGHT_TEXT",
+    "DRILL_SETS",
     "MAX_CANDIDATE_DRILLS",
+    "MAX_DRILL_AMOUNT",
     "MAX_DRILL_REST_SECONDS",
     "MAX_DRILLS",
     "MAX_MINUTES",
     "MIN_DRILLS",
     "MIN_MINUTES",
+    "DrillLoadKind",
+    "DrillQuantityKind",
+    "WarmUpDrill",
     "WarmUpInput",
     "WeightedMuscle",
     "candidate_drills",
     "derive_warm_up_input",
+    "drill_load",
+    "drill_load_names_itself",
+    "drill_quantity",
     "fits_equipment",
     "leading_warm_up_length",
 ]

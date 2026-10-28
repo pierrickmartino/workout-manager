@@ -15,6 +15,7 @@ import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import type { ProtocolIndexEntry } from "@/lib/protocols-index";
 import type { PersonalRecordEntry, VolumePoint } from "@/lib/analytics-types";
+import type { WarmUpSuggestion } from "@/lib/warm-up-suggestion";
 
 const originalNames = ["Long workout name with spaces ".repeat(5).slice(0, 120), "W".repeat(120)];
 const originalExerciseNames = ["Long exercise name with spaces ".repeat(4).slice(0, 100), "W".repeat(100)];
@@ -85,6 +86,27 @@ export const prescriptions: ExercisePrescription[] = exercises.slice(0, 3).map((
 export const workout: WorkoutSession = {
   id: 1, clerk_user_id: "audit-synthetic-account", training_type: "strength", duration_minutes: 30,
   has_been_regenerated: false, provenance: "user_authored", name: names[0], prescriptions,
+};
+// A Warm-up Suggestion (ADR-0143) at its widest: six drills — the most a suggestion holds — led
+// by the two fixture names, mixing reps and seconds, bodyweight and a long qualitative Load, and
+// replacing a Warm-up Section the Session already opens with, so Add reads Replace.
+export const warmUpSuggestion: WarmUpSuggestion = {
+  drills: exercises.slice(0, 6).map((exercise, i) => ({
+    exercise_id: exercise.id,
+    exercise_name: exercise.name,
+    sets: 1,
+    reps: i % 2 === 0 ? "12" : "45s",
+    prescribed_quantity: i % 2 === 0
+      ? { kind: "repetitions", text: "12", count: 12 }
+      : { kind: "duration", text: "45s", seconds: 45 },
+    recommended_load: i % 3 === 2
+      ? { kind: "qualitative", text: "light resistance band, held overhead" }
+      : { kind: "bodyweight", text: "bodyweight" },
+    rest_seconds: 15,
+    set_type: "warm_up",
+  })),
+  estimated_minutes: 8,
+  has_warm_up_section: true,
 };
 // The live journey's Session: the shared prescriptions plus a two-member Superset with mixed
 // Load kinds, so the set table's member legend and round grouping (ADR-0114) are measured at

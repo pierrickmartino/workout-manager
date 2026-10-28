@@ -106,8 +106,20 @@ function containsAny(name: string, keywords: readonly string[]): boolean {
 
 // A warm-up Set Type is the strongest warm-up signal. Mirrors the domain `is_warm_up`: an
 // unset or any other value is not a warm-up.
-function isWarmUpSet(setType: string | null | undefined): boolean {
+export function isWarmUpSet(setType: string | null | undefined): boolean {
   return setType === "warm_up";
+}
+
+// The prescribed items the Completion Outcome counts (ADR-0143): every one that is not a
+// warm-up, so skipping a warm-up never makes a Session Incomplete. A Session made only of
+// warm-ups has no other work, so then all of them count — never a vacuous Completed. The one
+// rule the Live Session (per set) and the static log form (per prescription) share.
+export function completionGatingItems<T>(
+  items: readonly T[],
+  setTypeOf: (item: T) => string | null | undefined,
+): readonly T[] {
+  const nonWarmUp = items.filter((item) => !isWarmUpSet(setTypeOf(item)));
+  return nonWarmUp.length > 0 ? nonWarmUp : items;
 }
 
 function isForTime(quantityKind: string | null | undefined): boolean {

@@ -16,12 +16,13 @@ from dataclasses import dataclass
 
 from app.domain.equipment import normalize_stored_equipment
 from app.domain.exercise import Provenance
-from app.domain.load import LoadKind, ParsedLoad
-from app.domain.quantity import Quantity, QuantityKind
 from app.domain.set_type import SetType
 from app.domain.warm_up import (
+    DRILL_SETS,
     candidate_drills,
     derive_warm_up_input,
+    drill_load,
+    drill_quantity,
     fits_equipment,
     leading_warm_up_length,
 )
@@ -32,13 +33,7 @@ from app.generation.warm_up_generator import WarmUpGenerator, WarmUpRequest
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository
-
-#: Every suggested drill is one set (ADR-0143).
-DRILL_SETS = 1
-
-
-class SessionNotFound(Exception):
-    """The Session does not exist or is owned by another user."""
+from app.warm_up.errors import SessionNotFound
 
 
 @dataclass(frozen=True)
@@ -60,19 +55,6 @@ class WarmUpSuggestion:
     drills: tuple[SuggestedDrill, ...]
     estimated_minutes: int
     has_warm_up_section: bool
-
-
-def _quantity(drill: GeneratedWarmUpDrill) -> Quantity:
-    if drill.quantity_kind == QuantityKind.DURATION.value:
-        text = f"{drill.amount}s"
-        return Quantity(kind=QuantityKind.DURATION, text=text, seconds=float(drill.amount))
-    return Quantity(kind=QuantityKind.REPETITIONS, text=str(drill.amount), count=drill.amount)
-
-
-def _load(drill: GeneratedWarmUpDrill) -> ParsedLoad:
-    if drill.load_kind == LoadKind.QUALITATIVE.value:
-        return ParsedLoad(kind=LoadKind.QUALITATIVE, text=(drill.load_text or "").strip())
-    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight")
 
 
 def _required_equipment(drill: GeneratedWarmUpDrill, exercises: ExerciseRepository) -> list[str]:
@@ -106,13 +88,13 @@ def _resolve(drill: GeneratedWarmUpDrill, exercises: ExerciseRepository) -> Sugg
         required_equipment=normalize_stored_equipment(drill.required_equipment).values,
         instructions=drill.instructions,
     )
-    quantity = _quantity(drill)
+    quantity = drill_quantity(drill.quantity_kind, drill.amount)
     return SuggestedDrill(
         exercise_id=exercise.id,
         exercise_name=exercise.name,
         reps=quantity.text,
         prescribed_quantity=quantity.to_dict(),
-        recommended_load=_load(drill).to_dict(),
+        recommended_load=drill_load(drill.load_kind, drill.load_text).to_dict(),
         rest_seconds=drill.rest_seconds,
     )
 
@@ -148,17 +130,14 @@ def suggest_warm_up(
         profile_constraints=profile.sensitive_constraints,
     )
     request = WarmUpRequest(
-        muscles=derived.muscle_names,
-        unmapped_exercises=derived.unmapped_exercises,
-        equipment=derived.equipment,
-        sensitive_constraints=derived.sensitive_constraints,
+        derived=derived,
         candidate_drills=candidate_drills(exercises.list_all(), derived.equipment),
     )
 
     def generate_checked(req: WarmUpRequest) -> GeneratedWarmUp:
         # Checked before the cache stores it, so a refused suggestion is never cached.
         generated = generator.generate(req)
-        _check_equipment(generated.drills, req.equipment, exercises)
+        _check_equipment(generated.drills, req.derived.equipment, exercises)
         return generated
 
     generated = cache.suggestion_for(request, generate_checked, regenerate=regenerate)
@@ -170,8 +149,6 @@ def suggest_warm_up(
 
 
 __all__ = [
-    "DRILL_SETS",
-    "SessionNotFound",
     "SuggestedDrill",
     "WarmUpSuggestion",
     "suggest_warm_up",
