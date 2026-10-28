@@ -56,6 +56,7 @@ import { drainOutbox, enqueueFinish } from "@/lib/finish-outbox-sync";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import type { Phase } from "@/lib/wake-lock";
 import { LiveSessionSets } from "@/components/live-session-sets";
+import { LiveWarmUpSuggestion } from "@/components/LiveWarmUpSuggestion";
 import {
   readLiveSessionSlot,
   writeLiveSessionSlot,
@@ -630,6 +631,8 @@ export function LiveSessionScreen({
       {finishState.error ? (
         <Alert announce tone="error">{finishState.error}</Alert>
       ) : null}
+
+      <LiveWarmUpSuggestion session={session} state={state} unit={weightUnit} />
 
       {following ? (
         <p className="font-mono text-[12px] text-text-secondary">
