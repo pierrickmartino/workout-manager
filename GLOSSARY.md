@@ -137,8 +137,20 @@ A catalog Exercise that achieves a *similar* training effect or targets the same
 _Avoid_: Substitute, replacement (as the relationship name)
 
 **Substitution**:
-The act of swapping one Exercise Prescription's Exercise for a Variation or Alternative within the user's own Session copy. Resolved lookup-first over catalog relationships (filtered by the user's equipment, constraints, and goal), falling back to AI only when no suitable link exists. Unlimited and distinct from Regeneration.
+The act of swapping one Exercise Prescription's Exercise for a Variation or Alternative within the user's own Session copy. Resolved lookup-first over catalog relationships (filtered by the Available Equipment, constraints, and goal), falling back to AI only when no suitable link exists. When the new Exercise needs different equipment, the Load is re-expressed for it rather than carried over, and the Prescribed Original is kept so the swap can be undone (ADR-0143). Unlimited and distinct from Regeneration.
 _Avoid_: Swap, replace (as the domain term)
+
+**Equipment Substitution**:
+A Substitution run in one batch over every Exercise Prescription of a Session that the user's chosen Available Equipment cannot support, so the Session keeps training the same Muscle Groups with the kit actually at hand. It edits that one un-performed Session in place; it is not a new Session and not a Regeneration (ADR-0143).
+_Avoid_: Equipment Swap, alternative session, substitute session, regenerate for equipment
+
+**Prescribed Original**:
+The Exercise, Load, and Progression Scheme an Exercise Prescription carried before its first Substitution — what the plan prescribed. A plan-side snapshot on the user's own copy: never carried into Duplicate, Share, Redeem, or Adopt copies, and kept unchanged through later Substitutions (ADR-0143).
+_Avoid_: Swapped-Out Prescription, previous exercise, undo history
+
+**Restore**:
+The act of putting a substituted Exercise Prescription back to its Prescribed Original, Load and Progression Scheme included. Offered only where Substitution is: never on a performed Protocol Session (ADR-0143).
+_Avoid_: Undo, revert, un-substitute
 
 **Insert**:
 The act of a user **hand-authoring a new Exercise Prescription into their own standalone Session**, in place and with **no AI call** — picking a catalog Exercise and its sets, Quantity, rest, tempo, and Load, appended at the end as a **solo (non-Superset)** Prescription in v1. Edits the *plan* only: it never reaches the *record*, so a Session's past Logged Sessions are frozen (plan/record separation) and only **future** performances see the added movement — the same in-place plan-edit semantics as **Substitution**, which swaps a Prescription rather than adding one. **Session Provenance is immutable origin and unchanged**: inserting into an `ai_generated` Session leaves it `ai_generated`, so Generation Feedback and Regeneration stay available (hand-adding a Prescription never makes a plan's content "wholly user-authored"). Offered on **standalone Sessions only** (generated or Hand-Authored); adding a Prescription to a Protocol-member Session goes through the Builder's tail-gated **Deploy** instead (ADR-0051). Distinct from **Substitution** (swap, not add), **Regeneration** (AI replacement of non-kept Prescriptions), and **Deploy** (the Protocol tail-edit commit).
